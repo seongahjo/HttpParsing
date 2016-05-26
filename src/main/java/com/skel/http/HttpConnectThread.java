@@ -9,28 +9,37 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.StringTokenizer;
 
 /**
  * Created by seongahjo on 2016. 5. 22..
  */
 public class HttpConnectThread extends Thread {
-    private String toUrl;
-    private String loginUrl;
-    private String id;
-    private String password;
-    private CloseableHttpClient client;
-    private HttpGet get;
-    private HttpResponse response;
-    private Header header;
+    private String toUrl; // 이후 접근하는 URL
+    private String totoUrl; // 처음 접근하는 URL
+    private String loginUrl; // 로그인하는 URL
+    private String id; // 아이디
+    private String password; // 비밀번호
+    private String all; // 취득학점
+    private String score; // 학점
+    private CloseableHttpClient client; // client객체
+    private HttpGet get; // get객체 선언
+    private HttpResponse response; // response객체 선언
+    private Header header; // header객체 선언
 
-    public HttpConnectThread(String url, String loginUrl) {
-        toUrl = url;
+    public HttpConnectThread(String url, String totoUrl, String loginUrl) {
         this.loginUrl = loginUrl;
+        this.toUrl = url;
+        this.totoUrl = totoUrl;
     }
 
     public void setUser(String id, String password) {
@@ -42,6 +51,7 @@ public class HttpConnectThread extends Thread {
         try {
             login();
             request();
+            go();
             client.close();
         } catch (Exception e) {
             e.printStackTrace();
@@ -61,9 +71,10 @@ public class HttpConnectThread extends Thread {
             for (Header h : response.getHeaders("Set-Cookie"))
                 if (h.getValue().contains("JSESSIONID")) //Session id를 가지고 있는 쿠키 찾기
                     header = h;
+
             post.abort(); // abort
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
@@ -73,16 +84,38 @@ public class HttpConnectThread extends Thread {
         get.addHeader(header); // 세션 추가
         try {
             response = client.execute(get); // 접속
-            /*
-            파싱
-             */
+            get.abort(); // abort
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void go() {
+        get = new HttpGet(totoUrl); // Get객체 생성
+        get.addHeader(header); // 세션 추가
+        StringBuilder sb = new StringBuilder();
+        try {
+            response = client.execute(get); // 접속
             BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
-            String line = "";
+            String line;
             while ((line = rd.readLine()) != null)
-                System.out.println(line);
+                sb.append(line);
             rd.close();
-            get.abort(); //abort
-        } catch (Exception e) {
+            get.abort(); // abort
+
+            /* 파싱 */
+            Document doc = Jsoup.parse(sb.toString());
+            Elements el = doc.select("table.adTB td");
+            String temp = el.get(0).text();
+            StringTokenizer st = new StringTokenizer(temp);
+            st.nextToken();
+            all = st.nextToken();
+            st.nextToken();
+            score = st.nextToken();
+
+            System.out.println(all);
+            System.out.print(score);
+        } catch (IOException e) { // IOException
             e.printStackTrace();
         }
     }
